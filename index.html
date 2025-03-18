@@ -10,6 +10,7 @@
             rel="stylesheet"
         />
         <style>
+            /* ... (CSS Styles - same as before) ... */
             :root {
                 --primary-color: #5e81ac; /* Tactical blue-gray */
                 --primary-dark: #4c566a;
@@ -627,17 +628,72 @@
         </div>
 
         <script>
+            // --- Encryption/Decryption Helper Functions (Simplified for demonstration) ---
+            function generateSymmetricKey() {
+                // In real app, use cryptographically secure random key
+                return Math.random().toString(36).substring(2, 16); // Increased key length for XOR demo
+            }
+
+            function splitKey(key) {
+                let s1 = "";
+                let s2 = "";
+                for (let i = 0; i < key.length; i++) {
+                    const charCode = key.charCodeAt(i);
+                    const randomByte = Math.floor(Math.random() * 256); // Generate random byte (0-255)
+                    s1 += String.fromCharCode(randomByte);
+                    s2 += String.fromCharCode(charCode ^ randomByte); // XOR operation
+                }
+                return { s1, s2 };
+            }
+
+            function combineKeys(s1, s2) {
+                let combinedKey = "";
+                for (let i = 0; i < s1.length; i++) {
+                    combinedKey += String.fromCharCode(
+                        s1.charCodeAt(i) ^ s2.charCodeAt(i)
+                    ); // XOR to combine
+                }
+                return combinedKey;
+            }
+
+            function encryptMessage(message, key) {
+                // Simple XOR encryption for demonstration - NOT SECURE for real use
+                let encryptedMessage = "";
+                for (let i = 0; i < message.length; i++) {
+                    encryptedMessage += String.fromCharCode(
+                        message.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+                    );
+                }
+                return btoa(encryptedMessage); // Base64 encode for text transport
+            }
+
+            function decryptMessage(encryptedBase64, key) {
+                const encryptedMessage = atob(encryptedBase64); // Base64 decode
+                let decryptedMessage = "";
+                for (let i = 0; i < encryptedMessage.length; i++) {
+                    decryptedMessage += String.fromCharCode(
+                        encryptedMessage.charCodeAt(i) ^
+                            key.charCodeAt(i % key.length)
+                    );
+                }
+                return decryptedMessage;
+            }
+
+            // --- Removed encryptKeyPart and decryptKeyPart ---
+
             // Full Working Code (Bug Fixed)
             // Initialize variables
             let myPeer;
             let connection;
             let myPassword = "";
             let messages = [];
-            let peerPassword = "";
-            let currentUnlockMessageId = null; // To track which message is being unlocked
-            let modalPurpose = null; // New variable to track modal purpose ('unlock' or 'approve')
+            let peerPassword = ""; // Placeholder for peer's "public key" (in real app, get public key)
+            let currentUnlockMessageId = null;
+            let modalPurpose = null;
+            let s1_local = {}; // Store local S1 for sent messages after lock time
+            let s2_local = {}; // Store local S2 for received messages after lock time
 
-            // DOM Elements
+            // DOM Elements (same as before)
             const peerIdDisplay = document.getElementById("peer-id");
             const connectToIdInput = document.getElementById("connect-to-id");
             const connectButton = document.getElementById("connect-button");
@@ -655,14 +711,14 @@
             const connectionStatus =
                 document.getElementById("connection-status");
             const connectionForm = document.getElementById("connection-form");
-            const toastContainer = document.getElementById("toast-container"); // Get toast container
+            const toastContainer = document.getElementById("toast-container");
 
-            // Modal Elements
+            // Modal Elements (same as before)
             const passwordModalOverlay = document.getElementById(
                 "password-modal-overlay"
             );
             const passwordModal = document.getElementById("password-modal");
-            const modalTitle = document.getElementById("modal-title"); // Added modal title
+            const modalTitle = document.getElementById("modal-title");
             const modalPasswordInput = document.getElementById(
                 "modal-password-input"
             );
@@ -698,6 +754,8 @@
                     connectionStatus.className = "status-disconnected";
                     connectionStatus.textContent = "Ready";
                     showToast("Your peer ID is ready", "info");
+                    // For demo, set peer's "public key" to their peer ID - No longer used in encryption demo
+                    peerPassword = id;
                 });
 
                 myPeer.on("connection", (conn) => {
@@ -741,7 +799,7 @@
                 });
             }
 
-            // Handle incoming data based on type (same as before)
+            // Handle incoming data based on type (modified for encryption)
             function handleIncomingData(data) {
                 if (data.type === "message") {
                     receiveMessage(data);
@@ -749,9 +807,13 @@
                     showUnlockRequest(data);
                 } else if (data.type === "unlock-approval") {
                     handleUnlockApproval(data);
-                } else if (data.type === "password-verification") {
-                    verifyPassword(data);
+                } else if (data.type === "key-part-s1") {
+                    handleKeyPartS1(data);
+                } else if (data.type === "key-part-s1-response") {
+                    // New case for S2 response
+                    handleKeyPartS1Response(data);
                 }
+                console.log(messages, data);
             }
 
             // Connect to a peer (same as before)
@@ -788,7 +850,7 @@
                 }
             });
 
-            // Send a message (same as before)
+            // Send a message (modified for encryption and key splitting)
             sendButton.addEventListener("click", () => {
                 const messageText = messageInput.value.trim();
                 if (messageText && connection) {
@@ -797,34 +859,59 @@
                 }
             });
 
-            // Send message function (same as before)
+            function decryptMessageData(message) {
+                const s2 = message.s2; // Receive plain S2 (XOR Share)
+                const s1 = message.s1; // Receive plain S1 (XOR Share)
+                const symmetricKey = combineKeys(s1, s2); // Combine using XOR
+                const decryptedMessageText = decryptMessage(
+                    message.text,
+                    symmetricKey
+                );
+                return { ...message, text: decryptedMessageText };
+            }
+
+            // Send message function (modified for encryption and XOR key splitting)
             function sendMessage(text) {
                 const messageId = generateId();
                 const timestamp = Date.now();
                 const lockTime = timestamp + 10 * 1000; // 10 second lock time
 
+                const symmetricKey = generateSymmetricKey();
+                const { s1, s2 } = splitKey(symmetricKey); // Use XOR based splitKey
+                const encryptedMessageText = encryptMessage(text, symmetricKey);
+
+                // --- Removed encryptKeyPart calls - sending plain s1 and s2 ---
+
                 const message = {
                     id: messageId,
                     type: "message",
-                    text: text,
+                    text: encryptedMessageText, // Send encrypted message
                     sender: "me",
                     timestamp: timestamp,
                     locked: false,
                     lockTime: lockTime,
+                    s2: s2, // Send plain S2 (now XOR share)
+                    s1: s1, // Send plain S1 (now XOR share) - for immediate decrypt
                 };
+
+                console.log(message);
 
                 messages.push(message);
                 displayMessage(message);
+                s1_local[messageId] = s1; // Store S1 locally for potential later decryption request from peer
+                s2_local[messageId] = s2; // Store S2 locally - sender keeps S2
 
-                // Send to peer
+                // Send to peer - now includes plain XOR key parts
                 connection.send({
                     id: messageId,
                     type: "message",
-                    text: text,
-                    sender: "peer",
+                    text: encryptedMessageText,
+                    sender: "peer", // Receiver is peer
                     timestamp: timestamp,
                     locked: false,
                     lockTime: lockTime,
+                    s2: s2, // Send plain S2 (XOR Share)
+                    s1: s1, // Send plain S1 (XOR Share) - for immediate decrypt
                 });
 
                 // Set timer to lock this message
@@ -833,15 +920,17 @@
                 }, lockTime - timestamp);
             }
 
-            // Receive message function (same as before)
-            function receiveMessage(message) {
-                messages.push(message);
-                displayMessage(message);
+            // Receive message function (modified for decryption and XOR key splitting)
+            function receiveMessage(messageData) {
+                messages.push(messageData);
+                displayMessage(messageData);
+                s1_local[messageData.id] = messageData.s1; // Receiver keeps S1 (XOR Share)
+                s2_local[messageData.id] = messageData.s2; // Store S2 locally for potential decryption request from sender
 
                 // Set timer to lock this message
                 setTimeout(() => {
-                    lockMessage(message.id);
-                }, message.lockTime - Date.now());
+                    lockMessage(messageData.id);
+                }, messageData.lockTime - Date.now());
             }
 
             // Format time for display (same as before)
@@ -853,8 +942,9 @@
                 });
             }
 
-            // Display a message in the chat container (same as before)
-            function displayMessage(message) {
+            // Display a message in the chat container (modified for locked state)
+            function displayMessage(messageData) {
+                const message = decryptMessageData(messageData);
                 const messageElement = document.createElement("div");
                 messageElement.id = `message-${message.id}`;
                 messageElement.className = `message ${message.sender}`;
@@ -879,7 +969,7 @@
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
 
-            // Lock a message (same as before)
+            // Lock a message (same as before - UI update only)
             function lockMessage(messageId) {
                 const messageIndex = messages.findIndex(
                     (m) => m.id === messageId
@@ -899,20 +989,26 @@
             `;
                         showToast("Message locked", "info");
                     }
+
+                    if (messages[messageIndex] == "me") {
+                        delete s2_local[messageId];
+                    } else if (messages[messageIndex] == "peer") {
+                        delete s1_local[messageId];
+                    }
                 }
             }
 
-            // Show Password Modal for Unlock Request
+            // Show Password Modal for Unlock Request (same as before)
             function showPasswordModalForUnlock(messageId) {
                 currentUnlockMessageId = messageId;
-                modalPurpose = "unlock"; // Set modal purpose to 'unlock'
-                modalTitle.textContent = "Enter Password to Unlock Message"; // Update modal title
+                modalPurpose = "unlock";
+                modalTitle.textContent = "Enter Password to Unlock Message";
                 passwordModalOverlay.classList.add("visible");
                 modalPasswordInput.value = "";
                 modalPasswordInput.focus();
             }
 
-            // Request to unlock a message (modified to use modal and modalPurpose)
+            // Request to unlock a message (modified to request key part S1)
             function requestUnlock(password) {
                 if (password === myPassword) {
                     if (connection) {
@@ -927,10 +1023,10 @@
                 }
                 hidePasswordModal();
                 currentUnlockMessageId = null;
-                modalPurpose = null; // Clear modal purpose
+                modalPurpose = null;
             }
 
-            // Show unlock request (same as before)
+            // Show unlock request (modified to handle key part S1 sending on approval)
             function showUnlockRequest(data) {
                 const requestElement = document.createElement("div");
                 requestElement.className = "unlock-request";
@@ -947,41 +1043,46 @@
                 showToast("Unlock request received", "info");
             }
 
-            // Show Password Modal for Approve Unlock
+            // Show Password Modal for Approve Unlock (same as before)
             function showPasswordModalForApprove(messageId) {
                 currentUnlockMessageId = messageId;
-                modalPurpose = "approve"; // Set modal purpose to 'approve'
-                modalTitle.textContent = "Enter Password to Approve Unlock"; // Update modal title
+                modalPurpose = "approve";
+                modalTitle.textContent = "Enter Password to Approve Unlock";
                 passwordModalOverlay.classList.add("visible");
                 modalPasswordInput.value = "";
                 modalPasswordInput.focus();
             }
 
-            // Approve unlock request (modified to use modal and modalPurpose)
+            // Approve unlock request (modified to send key part S1)
             function approveUnlock(password) {
                 if (password === myPassword) {
-                    unlockMessage(currentUnlockMessageId);
                     if (connection) {
+                        const messageId = currentUnlockMessageId;
+                        // --- Removed encryptKeyPart call - sending plain s1 ---
+                        const s2ToSend = s2_local[messageId]; // Get plain S1 to send back
                         connection.send({
                             type: "unlock-approval",
-                            messageId: currentUnlockMessageId,
+                            messageId: messageId,
                             approved: true,
+                            s2_part: s2ToSend, // Send plain S1 part (XOR Share)
                         });
+
                         // Remove request from UI
                         const requestElement = document.getElementById(
-                            `request-${currentUnlockMessageId}`
+                            `request-${messageId}`
                         );
                         if (requestElement) {
                             requestElement.remove();
                         }
-                        showToast("Unlock approved.", "success");
+                        showToast("Unlock approved and S2 sent.", "success");
+                        requestKeyPartS1(messageId); // Request S1 part from peer
                     }
                 } else {
                     showToast("Incorrect password.", "error");
                 }
                 hidePasswordModal();
                 currentUnlockMessageId = null;
-                modalPurpose = null; // Clear modal purpose
+                modalPurpose = null;
             }
 
             // Reject unlock request (same as before)
@@ -1005,23 +1106,80 @@
                 }
             }
 
-            // Handle unlock approval from peer (same as before)
+            // Handle unlock approval from peer (modified to receive key part S1 and request S2)
             function handleUnlockApproval(data) {
                 if (data.approved) {
-                    showToast("Unlock approved by peer.", "success");
-                    unlockMessage(data.messageId);
+                    showToast(
+                        "Unlock approved by peer, receiving S1.",
+                        "success"
+                    );
+                    const s2_part = data.s2_part; // Receive plain S1 (XOR Share)
+                    if (s2_part) {
+                        // Store received S1, now request S2
+                        s2_local[data.messageId] = s2_part;
+                        unlockMessage(data.messageId); // Unlock and redisplay message
+                        showToast("S2 received, message unlocked.", "success");
+                    } else {
+                        showToast("Approval received but no S1 part.", "error");
+                    }
                 } else {
                     showToast("Unlock rejected by peer.", "error");
                 }
             }
 
-            // Unlock a message (same as before)
+            // Request Key Part S1 from Peer
+            function requestKeyPartS1(messageId) {
+                if (connection) {
+                    connection.send({
+                        type: "key-part-s1",
+                        messageId: messageId,
+                    });
+                    showToast("Requesting S1 from peer.", "info");
+                }
+            }
+
+            // Handle Key Part S2 Request from Peer (send back plain S2)
+            function handleKeyPartS1(data) {
+                const messageId = data.messageId;
+                // --- Removed encryptKeyPart call - sending plain s2 ---
+                const s1ToSend = s1_local[messageId]; // Get plain S2 to send back
+
+                if (connection) {
+                    connection.send({
+                        type: "key-part-s1-response",
+                        messageId: messageId,
+                        s1_part: s1ToSend, // Send plain S2 part (XOR Share)
+                    });
+                    showToast("Sending S1 to peer.", "success");
+                }
+            }
+
+            function handleKeyPartS1Response(data) {
+                const s1_part = data.s1_part; // Receive plain S2 (XOR Share)
+                if (s1_part) {
+                    const messageId = data.messageId;
+
+                    const s2_part = s2_local[messageId]; // Get existing S2 part retained
+                    if (s2_part) {
+                        unlockMessage(messageId); // Unlock and redisplay message
+                        showToast("S1 received, message unlocked.", "success");
+                    } else {
+                        showToast("S2 part not found locally.", "error");
+                    }
+                } else {
+                    showToast("S1 part not received from peer.", "error");
+                }
+            }
+
+            // Unlock a message (same as before - UI update only)
             function unlockMessage(messageId) {
                 const messageIndex = messages.findIndex(
                     (m) => m.id === messageId
                 );
                 if (messageIndex !== -1) {
-                    const message = messages[messageIndex];
+                    const message = decryptMessageData(
+                        messages.find((m) => m.id === messageId)
+                    );
                     message.locked = false;
 
                     const messageElement = document.getElementById(
@@ -1074,9 +1232,9 @@
             modalSubmitButton.addEventListener("click", () => {
                 const password = modalPasswordInput.value.trim();
                 if (modalPurpose === "unlock") {
-                    requestUnlock(password); // Call requestUnlock if modal was opened for unlocking message
+                    requestUnlock(password);
                 } else if (modalPurpose === "approve") {
-                    approveUnlock(password); // Call approveUnlock if modal was opened for approving request
+                    approveUnlock(password);
                 }
             });
 
@@ -1086,9 +1244,9 @@
             // Function to hide the password modal (same as before)
             function hidePasswordModal() {
                 passwordModalOverlay.classList.remove("visible");
-                modalPasswordInput.value = ""; // Clear input when closing
-                currentUnlockMessageId = null; // Clear current message ID
-                modalPurpose = null; // Clear modal purpose - important!
+                modalPasswordInput.value = "";
+                currentUnlockMessageId = null;
+                modalPurpose = null;
             }
 
             // Optional: Close modal on Escape key (same as before)
@@ -1102,8 +1260,8 @@
             });
 
             // Make functions globally available (same as before)
-            window.requestUnlock = requestUnlock; // Not directly used anymore, triggered by modal
-            window.approveUnlock = approveUnlock; // Not directly used anymore, triggered by modal
+            window.requestUnlock = requestUnlock;
+            window.approveUnlock = approveUnlock;
             window.rejectUnlock = rejectUnlock;
             window.showPasswordModalForUnlock = showPasswordModalForUnlock;
             window.showPasswordModalForApprove = showPasswordModalForApprove;
