@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SuperEncryption Chat</title>
+        <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --primary-color: #5e81ac; /* Tactical blue-gray */
+                --primary-dark: #4c566a;
+                --secondary-color: #9ece6a; /* Neon green accent */
+                --accent-color: #ff6c5c; /* Warning orange */
+                --sent-bg: #3b4252; /* Darker sent background */
+                --sent-border: #434c5e;
+                --received-bg: #434c5e; /* Darker received background */
+                --received-border: #4c566a;
+                --locked-bg: #5c2e2e; /* Darker locked background */
+                --locked-border: #8f3b3b;
+                --background: #2e3440; /* Dark background */
+                --card-bg: #3b4252; /* Dark card background */
+                --text-primary: #eceff4; /* Light primary text */
+                --text-secondary: #abb7c4; /* Light secondary text */
+                --success-color: #a3be8c;
+                --error-color: #bf616a;
+                --info-color: #81a1c1;
+                --radius-sm: 4px; /* Sharper small radius */
+                --radius-md: 6px; /* Sharper medium radius */
+                --radius-lg: 8px; /* Sharper large radius */
+                --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2); /* Stronger small shadow */
+                --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.3); /* Stronger medium shadow */
+                --shadow-lg: 0 5px 10px rgba(0, 0, 0, 0.4); /* Stronger large shadow */
+            }
+
+            body {
+                font-family: "Roboto Mono", monospace; /* Monospace font! */
+                max-width: 1000px;
+                margin: 0 auto;
+                padding: 20px 15px; /* Reduced body padding */
+                background-color: var(--background);
+                color: var(--text-primary);
+                line-height: 1.5; /* Tighter line height */
+                transition: all 0.2s ease;
+                font-size: 0.9rem; /* Slightly smaller base font */
+            }
+
+            h1,
+            h2 {
+                color: var(--text-primary);
+                letter-spacing: 0; /* No letter spacing */
+                margin-bottom: 15px; /* Reduced heading margin */
+                font-weight: 500; /* Slightly lighter headings */
+            }
+
+            h1 {
+                font-size: 1.8rem; /* Smaller h1 */
+                text-align: center;
+                margin-bottom: 25px; /* Reduced h1 margin */
+                color: var(--text-primary); /* White h1 text */
+            }
+
+            h1::after {
+                content: none; /* No underline for h1 */
+            }
+
+            #chat-container {
+                border: 2px solid var(--primary-dark); /* Stronger border */
+                border-radius: var(--radius-md);
+                height: 400px; /* Reduced height */
+                overflow-y: auto;
+                padding: 10px; /* Reduced chat container padding */
+                margin-bottom: 15px; /* Reduced chat container margin */
+                background-color: var(--card-bg);
+                box-shadow: var(--shadow-md);
+                display: flex;
+                flex-direction: column;
+                scrollbar-width: thin;
+                scrollbar-color: var(--secondary-color) transparent;
+            }
+
+            #chat-container::-webkit-scrollbar {
+                width: 5px;
+            }
+
+            #chat-container::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            #chat-container::-webkit-scrollbar-thumb {
+                background-color: var(--secondary-color);
+                border-radius: var(--radius-sm);
+            }
+
+            .message {
+                margin-bottom: 8px; /* Reduced message margin */
+                padding: 10px 14px; /* Reduced message padding */
+                border-radius: var(--radius-md);
+                max-width: 80%; /* Slightly wider messages */
+                position: relative;
+                word-wrap: break-word;
+                box-shadow: var(--shadow-sm);
+                animation: fadeIn 0.2s ease-out; /* Faster animation */
+                transition: all 0.15s ease; /* Faster transition */
+                border: 2px solid transparent; /* Stronger base border */
+            }
+
+            .message:hover {
+                border-color: var(
+                    --primary-color
+                ); /* Highlight border on hover */
+                box-shadow: var(--shadow-md);
+            }
+
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(5px); /* Reduced fade-in distance */
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .message.me {
+                background-color: var(--sent-bg);
+                border-left: 4px solid var(--sent-border); /* Stronger left border */
+                align-self: flex-end;
+                border-bottom-right-radius: var(
+                    --radius-sm
+                ); /* Sharper bottom right */
+            }
+
+            .message.peer {
+                background-color: var(--received-bg);
+                border-left: 4px solid var(--received-border); /* Stronger left border */
+                align-self: flex-start;
+                border-bottom-left-radius: var(
+                    --radius-sm
+                ); /* Sharper bottom left */
+            }
+
+            .message p {
+                margin: 0; /* No paragraph margin in messages */
+            }
+
+            .message small {
+                display: block;
+                font-size: 0.65rem; /* Smaller time font */
+                color: var(--text-secondary);
+                margin-top: 4px;
+                text-align: right;
+            }
+
+            .locked-message {
+                background-color: var(--locked-bg);
+                border-left: 4px solid var(--locked-border); /* Stronger locked border */
+                font-style: italic;
+                color: var(--text-secondary);
+                padding: 8px 12px; /* Reduced locked message padding */
+                border-radius: var(
+                    --radius-md
+                ); /* Add border-radius to locked message */
+            }
+
+            .locked-message button {
+                margin-top: 6px; /* Reduced button margin */
+                padding: 5px 10px; /* Smaller button padding */
+                font-size: 0.7rem; /* Smaller button font */
+                background: rgba(
+                    191,
+                    97,
+                    106,
+                    0.2
+                ); /* Darker locked button background */
+                color: var(--error-color);
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--error-color); /* Add border to locked button */
+                cursor: pointer;
+            }
+
+            .card {
+                background: var(--card-bg);
+                border-radius: var(--radius-md);
+                padding: 20px; /* Reduced card padding */
+                margin-bottom: 20px; /* Reduced card margin */
+                box-shadow: var(--shadow-md);
+                border: 2px solid var(--primary-dark); /* Stronger card border */
+                transition: all 0.2s ease;
+            }
+
+            .card:hover {
+                box-shadow: var(--shadow-lg);
+                transform: translateY(-1px); /* Reduced hover transform */
+            }
+
+            button {
+                background-color: var(--primary-color); /* Solid button color */
+                color: var(--text-primary);
+                border: 2px solid var(--primary-dark); /* Strong button border */
+                border-radius: var(--radius-sm);
+                padding: 10px 16px; /* Reduced button padding */
+                cursor: pointer;
+                transition: all 0.2s ease;
+                font-weight: 400; /* Lighter button font weight */
+                font-size: 0.85rem; /* Smaller button font */
+                box-shadow: var(--shadow-sm);
+                position: relative;
+                overflow: hidden;
+            }
+
+            button::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(
+                    255,
+                    255,
+                    255,
+                    0.05
+                ); /* Very subtle overlay */
+                opacity: 0;
+                transition: opacity 0.2s;
+            }
+
+            button:hover::after {
+                opacity: 1;
+            }
+
+            button:hover {
+                background-color: var(
+                    --primary-dark
+                ); /* Darker button on hover */
+                border-color: var(--primary-color); /* Swap border on hover */
+                color: var(--text-primary);
+                box-shadow: var(--shadow-md);
+                transform: translateY(0); /* No hover transform */
+            }
+
+            button:active {
+                background-color: var(
+                    --primary-color
+                ); /* Button active color */
+                border-color: var(--primary-dark);
+                color: var(--text-primary);
+                box-shadow: var(--shadow-sm);
+                transform: translateY(1px); /* Active transform */
+            }
+
+            input[type="text"],
+            input[type="password"] {
+                padding: 10px; /* Reduced input padding */
+                border: 2px solid var(--primary-dark); /* Strong input border */
+                border-radius: var(--radius-sm);
+                width: 100%;
+                box-sizing: border-box;
+                margin-bottom: 12px; /* Reduced input margin */
+                font-size: 0.85rem; /* Smaller input font */
+                transition: all 0.15s ease;
+                box-shadow: var(--shadow-sm);
+                color: var(--text-primary);
+                background-color: var(--card-bg); /* Input background color */
+            }
+
+            input[type="text"]:focus,
+            input[type="password"]:focus {
+                border-color: var(--secondary-color); /* Focus border color */
+                box-shadow: var(--shadow-md);
+                outline: none;
+                background-color: #4c566a; /* Darker focus background */
+            }
+
+            input::placeholder {
+                color: var(--text-secondary);
+                opacity: 0.8;
+            }
+
+            .form-group {
+                margin-bottom: 18px; /* Reduced form group margin */
+            }
+
+            #connection-status {
+                display: inline-flex;
+                align-items: center;
+                padding: 4px 8px; /* Reduced status padding */
+                border-radius: var(--radius-sm);
+                font-size: 0.7rem; /* Smaller status font */
+                margin-left: 8px; /* Reduced status margin */
+                font-weight: 400; /* Lighter status font */
+                transition: all 0.2s ease;
+                opacity: 1; /* Status opacity */
+                border: 1px solid var(--primary-dark); /* Status border */
+            }
+
+            #connection-status::before {
+                content: "";
+                display: inline-block;
+                width: 6px; /* Smaller status dot */
+                height: 6px; /* Smaller status dot */
+                border-radius: 50%;
+                margin-right: 4px; /* Reduced status dot margin */
+                border: 1px solid var(--background); /* Dot border */
+            }
+
+            .status-connected {
+                background-color: var(--success-color);
+                color: var(--background); /* White status text */
+                border-color: var(--success-color); /* Status border color */
+            }
+
+            .status-connected::before {
+                background-color: var(--background);
+                box-shadow: none; /* No dot shadow */
+            }
+
+            .status-disconnected {
+                background-color: var(--error-color);
+                color: var(--background); /* White status text */
+                border-color: var(--error-color); /* Status border color */
+            }
+
+            .status-disconnected::before {
+                background-color: var(--background);
+                box-shadow: none; /* No dot shadow */
+            }
+
+            #chat-form {
+                display: flex;
+                gap: 8px; /* Reduced chat form gap */
+                margin-top: 15px; /* Reduced chat form margin */
+            }
+
+            #chat-form input {
+                flex-grow: 1;
+            }
+
+            .unlock-request {
+                background-color: var(--locked-bg); /* Dark unlock request bg */
+                padding: 12px; /* Reduced unlock request padding */
+                border-radius: var(--radius-md);
+                border-left: 4px solid var(--accent-color); /* Accent border */
+                margin: 10px 0; /* Reduced unlock request margin */
+                box-shadow: var(--shadow-sm);
+                animation: slideIn 0.3s ease-out; /* Faster animation */
+                border: 1px solid var(--accent-color); /* Unlock request border */
+            }
+
+            @keyframes slideIn {
+                from {
+                    opacity: 0;
+                    transform: translateX(-8px); /* Reduced slide-in distance */
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+
+            .unlock-buttons {
+                display: flex;
+                gap: 8px; /* Reduced unlock buttons gap */
+                margin-top: 10px; /* Reduced unlock buttons margin */
+            }
+
+            .unlock-buttons button:last-child {
+                background-color: var(
+                    --error-color
+                ); /* Solid reject button color */
+                border: 2px solid var(--error-color); /* Reject button border */
+                color: var(--background); /* White reject button text */
+                box-shadow: var(--shadow-sm);
+            }
+            .unlock-buttons button:last-child:hover {
+                background-color: var(--background);
+                color: var(--error-color);
+            }
+
+            .toast {
+                position: fixed;
+                bottom: 25px; /* Adjusted toast position */
+                right: 25px; /* Adjusted toast position */
+                padding: 12px 18px; /* Reduced toast padding */
+                border-radius: var(--radius-sm);
+                color: var(--background); /* White toast text */
+                max-width: 300px; /* Reduced toast max width */
+                box-shadow: var(--shadow-md);
+                z-index: 100;
+                opacity: 0;
+                transition: all 0.25s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Faster toast animation */
+                transform: translateY(15px); /* Reduced toast transform */
+                font-size: 0.8rem; /* Smaller toast font */
+                border: 1px solid transparent; /* Toast border */
+            }
+
+            .toast.success {
+                background-color: var(--success-color);
+                border-color: var(--success-color); /* Toast border color */
+            }
+
+            .toast.error {
+                background-color: var(--error-color);
+                border-color: var(--error-color); /* Toast border color */
+            }
+
+            .toast.info {
+                background-color: var(--info-color);
+                border-color: var(--info-color); /* Toast border color */
+            }
+
+            .toast.visible {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            #peer-id {
+                font-weight: 500;
+                color: var(--secondary-color); /* Neon green peer ID */
+                background-color: #4c566a; /* Darker peer ID background */
+                padding: 4px 8px; /* Reduced peer ID padding */
+                border-radius: var(--radius-sm);
+                position: relative;
+                cursor: pointer;
+                user-select: text;
+                border: 1px solid var(--secondary-color); /* Peer ID border */
+                font-family: monospace; /* Monospace Peer ID font */
+                font-size: 0.8rem; /* Slightly smaller Peer ID font */
+            }
+
+            #peer-id:hover::after {
+                content: "Click to copy";
+                position: absolute;
+                bottom: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: var(--background); /* Tooltip background */
+                color: var(--text-primary); /* Tooltip text color */
+                padding: 3px 6px; /* Smaller tooltip padding */
+                border-radius: var(--radius-sm);
+                font-size: 0.65rem; /* Smaller tooltip font */
+                margin-bottom: 4px; /* Reduced tooltip margin */
+                white-space: nowrap;
+                z-index: 1;
+                border: 1px solid var(--text-primary); /* Tooltip border */
+            }
+
+            /* Custom Password Modal Styles */
+            #password-modal-overlay {
+                display: none; /* Hidden by default */
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(
+                    0,
+                    0,
+                    0,
+                    0.5
+                ); /* Semi-transparent black overlay */
+                justify-content: center;
+                align-items: center;
+                z-index: 101; /* Above toast and everything else */
+            }
+
+            #password-modal {
+                background-color: var(--card-bg);
+                padding: 25px;
+                border-radius: var(--radius-md);
+                box-shadow: var(--shadow-lg);
+                border: 2px solid var(--primary-dark);
+                width: 350px;
+                max-width: 90%;
+                text-align: center;
+            }
+
+            #password-modal h3 {
+                margin-top: 0;
+                margin-bottom: 15px;
+                color: var(--text-primary);
+                font-size: 1.1rem;
+            }
+
+            #password-modal input[type="password"] {
+                margin-bottom: 20px;
+            }
+
+            .modal-buttons {
+                display: flex;
+                gap: 15px;
+                justify-content: center;
+            }
+
+            .modal-buttons button {
+                padding: 10px 20px;
+            }
+
+            #password-modal-overlay.visible {
+                display: flex; /* Make modal overlay visible */
+            }
+
+            @media (max-width: 768px) {
+                body {
+                    padding: 15px 10px; /* Further reduced body padding on small screens */
+                }
+
+                .card {
+                    padding: 15px; /* Further reduced card padding on small screens */
+                    margin-bottom: 15px; /* Further reduced card margin on small screens */
+                }
+
+                .message {
+                    max-width: 95%; /* Even wider messages on small screens */
+                    padding: 8px 12px; /* Further reduced message padding on small screens */
+                    margin-bottom: 6px; /* Further reduced message margin on small screens */
+                }
+
+                h1 {
+                    font-size: 1.6rem; /* Smaller h1 on small screens */
+                    margin-bottom: 20px; /* Reduced h1 margin on small screens */
+                }
+
+                #chat-container {
+                    height: 300px; /* Further reduced chat container height on small screens */
+                    padding: 8px; /* Further reduced chat container padding on small screens */
+                    margin-bottom: 15px; /* Reduced chat container margin on small screens */
+                }
+
+                #chat-form {
+                    gap: 6px; /* Further reduced chat form gap on small screens */
+                    margin-top: 10px; /* Reduced chat form margin on small screens */
+                }
+
+                .toast {
+                    bottom: 15px; /* Adjusted toast position on small screens */
+                    right: 15px; /* Adjusted toast position on small screens */
+                    font-size: 0.75rem; /* Smaller toast font on small screens */
+                    padding: 10px 15px; /* Further reduced toast padding on small screens */
+                }
+                #password-modal {
+                    padding: 20px; /* Reduced modal padding on small screens */
+                }
+                .modal-buttons {
+                    gap: 10px; /* Reduced modal button gap on small screens */
+                }
+                .modal-buttons button {
+                    padding: 8px 16px; /* Reduced modal button padding on small screens */
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <h1>SuperEncryption Chat</h1>
+        <div id="toast-container"></div>
+
+        <div id="setup-area" class="card">
+            <div id="password-form">
+                <h2>Set Password</h2>
+                <div class="form-group">
+                    <input
+                        type="password"
+                        id="user-password"
+                        placeholder="Enter password"
+                    />
+                    <button id="save-password">Save Password</button>
+                </div>
+            </div>
+
+            <div id="connection-form" style="display: none">
+                <h2>Connect to Peer</h2>
+                <div class="form-group">
+                    <p>
+                        Your ID:
+                        <span id="peer-id" title="Click to copy"
+                            >Generating...</span
+                        >
+                        <span id="connection-status" class="status-disconnected"
+                            >Disconnected</span
+                        >
+                    </p>
+                    <input
+                        type="text"
+                        id="connect-to-id"
+                        placeholder="Enter peer ID"
+                    />
+                    <button id="connect-button">Connect</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat-area" class="card" style="display: none">
+            <h2>Chat with <span id="connected-peer"></span></h2>
+            <div id="chat-container"></div>
+
+            <div id="chat-form">
+                <input
+                    type="text"
+                    id="message-input"
+                    placeholder="Type message..."
+                />
+                <button id="send-button">Send</button>
+            </div>
+
+            <div id="unlock-requests"></div>
+        </div>
+
+        <!-- Custom Password Modal -->
+        <div id="password-modal-overlay">
+            <div id="password-modal">
+                <h3 id="modal-title">Enter Password</h3>
+                <input
+                    type="password"
+                    id="modal-password-input"
+                    placeholder="Your Password"
+                />
+                <div class="modal-buttons">
+                    <button id="modal-submit-button">Submit</button>
+                    <button id="modal-cancel-button">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Full Working Code (Bug Fixed)
+            // Initialize variables
+            let myPeer;
+            let connection;
+            let myPassword = "";
+            let messages = [];
+            let peerPassword = "";
+            let currentUnlockMessageId = null; // To track which message is being unlocked
+            let modalPurpose = null; // New variable to track modal purpose ('unlock' or 'approve')
+
+            // DOM Elements
+            const peerIdDisplay = document.getElementById("peer-id");
+            const connectToIdInput = document.getElementById("connect-to-id");
+            const connectButton = document.getElementById("connect-button");
+            const messageInput = document.getElementById("message-input");
+            const sendButton = document.getElementById("send-button");
+            const chatContainer = document.getElementById("chat-container");
+            const connectedPeerDisplay =
+                document.getElementById("connected-peer");
+            const passwordInput = document.getElementById("user-password");
+            const savePasswordButton = document.getElementById("save-password");
+            const setupArea = document.getElementById("setup-area");
+            const chatArea = document.getElementById("chat-area");
+            const unlockRequestsArea =
+                document.getElementById("unlock-requests");
+            const connectionStatus =
+                document.getElementById("connection-status");
+            const connectionForm = document.getElementById("connection-form");
+            const toastContainer = document.getElementById("toast-container"); // Get toast container
+
+            // Modal Elements
+            const passwordModalOverlay = document.getElementById(
+                "password-modal-overlay"
+            );
+            const passwordModal = document.getElementById("password-modal");
+            const modalTitle = document.getElementById("modal-title"); // Added modal title
+            const modalPasswordInput = document.getElementById(
+                "modal-password-input"
+            );
+            const modalSubmitButton = document.getElementById(
+                "modal-submit-button"
+            );
+            const modalCancelButton = document.getElementById(
+                "modal-cancel-button"
+            );
+
+            // Toast notification system (same as before)
+            function showToast(message, type = "info") {
+                const toast = document.createElement("div");
+                toast.className = `toast ${type}`;
+                toast.textContent = message;
+                toastContainer.appendChild(toast);
+
+                setTimeout(() => toast.classList.add("visible"), 10);
+
+                setTimeout(() => {
+                    toast.classList.remove("visible");
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            // Initialize PeerJS (same as before)
+            function initializePeer() {
+                connectionStatus.textContent = "Connecting...";
+                myPeer = new Peer();
+
+                myPeer.on("open", (id) => {
+                    peerIdDisplay.textContent = id;
+                    connectionStatus.className = "status-disconnected";
+                    connectionStatus.textContent = "Ready";
+                    showToast("Your peer ID is ready", "info");
+                });
+
+                myPeer.on("connection", (conn) => {
+                    handleConnection(conn);
+                });
+
+                myPeer.on("error", (err) => {
+                    showToast(`Connection error: ${err.message}`, "error");
+                    connectionStatus.className = "status-disconnected";
+                    connectionStatus.textContent = "Error";
+                });
+            }
+
+            // Handle connection (same as before)
+            function handleConnection(conn) {
+                connection = conn;
+
+                connection.on("open", () => {
+                    setupArea.style.display = "none";
+                    chatArea.style.display = "block";
+                    connectedPeerDisplay.textContent = connection.peer;
+                    connectionStatus.className = "status-connected";
+                    connectionStatus.textContent = "Connected";
+                    showToast("Peer connected", "success");
+                });
+
+                connection.on("data", (data) => {
+                    handleIncomingData(data);
+                });
+
+                connection.on("close", () => {
+                    showToast("Connection closed", "info");
+                    connectionStatus.className = "status-disconnected";
+                    connectionStatus.textContent = "Disconnected";
+                    chatArea.style.display = "none";
+                    setupArea.style.display = "block";
+                });
+
+                connection.on("error", (err) => {
+                    showToast(`Connection error: ${err.message}`, "error");
+                });
+            }
+
+            // Handle incoming data based on type (same as before)
+            function handleIncomingData(data) {
+                if (data.type === "message") {
+                    receiveMessage(data);
+                } else if (data.type === "unlock-request") {
+                    showUnlockRequest(data);
+                } else if (data.type === "unlock-approval") {
+                    handleUnlockApproval(data);
+                } else if (data.type === "password-verification") {
+                    verifyPassword(data);
+                }
+            }
+
+            // Connect to a peer (same as before)
+            connectButton.addEventListener("click", () => {
+                const peerId = connectToIdInput.value.trim();
+                if (peerId && myPassword) {
+                    connectionStatus.textContent = "Connecting...";
+                    const conn = myPeer.connect(peerId);
+                    handleConnection(conn);
+                } else {
+                    showToast("Enter peer ID and set password.", "error");
+                }
+            });
+
+            // Save password (same as before)
+            savePasswordButton.addEventListener("click", () => {
+                const password = passwordInput.value.trim();
+                if (password) {
+                    myPassword = password;
+                    document.getElementById("password-form").style.display =
+                        "none";
+                    connectionForm.style.display = "block";
+                    initializePeer();
+                    showToast("Password saved", "success");
+                } else {
+                    showToast("Enter password", "error");
+                }
+            });
+
+            // Handle Enter key for password (same as before)
+            passwordInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    savePasswordButton.click();
+                }
+            });
+
+            // Send a message (same as before)
+            sendButton.addEventListener("click", () => {
+                const messageText = messageInput.value.trim();
+                if (messageText && connection) {
+                    sendMessage(messageText);
+                    messageInput.value = "";
+                }
+            });
+
+            // Send message function (same as before)
+            function sendMessage(text) {
+                const messageId = generateId();
+                const timestamp = Date.now();
+                const lockTime = timestamp + 10 * 1000; // 10 second lock time
+
+                const message = {
+                    id: messageId,
+                    type: "message",
+                    text: text,
+                    sender: "me",
+                    timestamp: timestamp,
+                    locked: false,
+                    lockTime: lockTime,
+                };
+
+                messages.push(message);
+                displayMessage(message);
+
+                // Send to peer
+                connection.send({
+                    id: messageId,
+                    type: "message",
+                    text: text,
+                    sender: "peer",
+                    timestamp: timestamp,
+                    locked: false,
+                    lockTime: lockTime,
+                });
+
+                // Set timer to lock this message
+                setTimeout(() => {
+                    lockMessage(messageId);
+                }, lockTime - timestamp);
+            }
+
+            // Receive message function (same as before)
+            function receiveMessage(message) {
+                messages.push(message);
+                displayMessage(message);
+
+                // Set timer to lock this message
+                setTimeout(() => {
+                    lockMessage(message.id);
+                }, message.lockTime - Date.now());
+            }
+
+            // Format time for display (same as before)
+            function formatTime(timestamp) {
+                const date = new Date(timestamp);
+                return date.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                });
+            }
+
+            // Display a message in the chat container (same as before)
+            function displayMessage(message) {
+                const messageElement = document.createElement("div");
+                messageElement.id = `message-${message.id}`;
+                messageElement.className = `message ${message.sender}`;
+
+                if (message.locked) {
+                    messageElement.classList.add("locked-message");
+                    messageElement.innerHTML = `
+            <p>🔒 [Message locked]</p>
+            <button onclick="showPasswordModalForUnlock('${
+                message.id
+            }')">Unlock</button>
+            <small>${formatTime(message.timestamp)}</small>
+        `;
+                } else {
+                    messageElement.innerHTML = `
+            <p>${message.text}</p>
+            <small>${formatTime(message.timestamp)}</small>
+        `;
+                }
+
+                chatContainer.appendChild(messageElement);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // Lock a message (same as before)
+            function lockMessage(messageId) {
+                const messageIndex = messages.findIndex(
+                    (m) => m.id === messageId
+                );
+                if (messageIndex !== -1) {
+                    messages[messageIndex].locked = true;
+
+                    const messageElement = document.getElementById(
+                        `message-${messageId}`
+                    );
+                    if (messageElement) {
+                        messageElement.classList.add("locked-message");
+                        messageElement.innerHTML = `
+                <p>🔒 [Message locked]</p>
+                <button onclick="showPasswordModalForUnlock('${messageId}')">Unlock</button>
+                <small>${formatTime(messages[messageIndex].timestamp)}</small>
+            `;
+                        showToast("Message locked", "info");
+                    }
+                }
+            }
+
+            // Show Password Modal for Unlock Request
+            function showPasswordModalForUnlock(messageId) {
+                currentUnlockMessageId = messageId;
+                modalPurpose = "unlock"; // Set modal purpose to 'unlock'
+                modalTitle.textContent = "Enter Password to Unlock Message"; // Update modal title
+                passwordModalOverlay.classList.add("visible");
+                modalPasswordInput.value = "";
+                modalPasswordInput.focus();
+            }
+
+            // Request to unlock a message (modified to use modal and modalPurpose)
+            function requestUnlock(password) {
+                if (password === myPassword) {
+                    if (connection) {
+                        connection.send({
+                            type: "unlock-request",
+                            messageId: currentUnlockMessageId,
+                        });
+                        showToast("Unlock request sent.", "success");
+                    }
+                } else {
+                    showToast("Incorrect password.", "error");
+                }
+                hidePasswordModal();
+                currentUnlockMessageId = null;
+                modalPurpose = null; // Clear modal purpose
+            }
+
+            // Show unlock request (same as before)
+            function showUnlockRequest(data) {
+                const requestElement = document.createElement("div");
+                requestElement.className = "unlock-request";
+                requestElement.id = `request-${data.messageId}`;
+                requestElement.innerHTML = `
+        <p>Unlock request received.</p>
+        <div class="unlock-buttons">
+            <button onclick="showPasswordModalForApprove('${data.messageId}')">Approve</button>
+            <button onclick="rejectUnlock('${data.messageId}')">Reject</button>
+        </div>
+    `;
+
+                unlockRequestsArea.appendChild(requestElement);
+                showToast("Unlock request received", "info");
+            }
+
+            // Show Password Modal for Approve Unlock
+            function showPasswordModalForApprove(messageId) {
+                currentUnlockMessageId = messageId;
+                modalPurpose = "approve"; // Set modal purpose to 'approve'
+                modalTitle.textContent = "Enter Password to Approve Unlock"; // Update modal title
+                passwordModalOverlay.classList.add("visible");
+                modalPasswordInput.value = "";
+                modalPasswordInput.focus();
+            }
+
+            // Approve unlock request (modified to use modal and modalPurpose)
+            function approveUnlock(password) {
+                if (password === myPassword) {
+                    unlockMessage(currentUnlockMessageId);
+                    if (connection) {
+                        connection.send({
+                            type: "unlock-approval",
+                            messageId: currentUnlockMessageId,
+                            approved: true,
+                        });
+                        // Remove request from UI
+                        const requestElement = document.getElementById(
+                            `request-${currentUnlockMessageId}`
+                        );
+                        if (requestElement) {
+                            requestElement.remove();
+                        }
+                        showToast("Unlock approved.", "success");
+                    }
+                } else {
+                    showToast("Incorrect password.", "error");
+                }
+                hidePasswordModal();
+                currentUnlockMessageId = null;
+                modalPurpose = null; // Clear modal purpose
+            }
+
+            // Reject unlock request (same as before)
+            function rejectUnlock(messageId) {
+                if (connection) {
+                    connection.send({
+                        type: "unlock-approval",
+                        messageId: messageId,
+                        approved: false,
+                    });
+
+                    // Remove request from UI
+                    const requestElement = document.getElementById(
+                        `request-${messageId}`
+                    );
+                    if (requestElement) {
+                        requestElement.remove();
+                    }
+
+                    showToast("Unlock request rejected.", "info");
+                }
+            }
+
+            // Handle unlock approval from peer (same as before)
+            function handleUnlockApproval(data) {
+                if (data.approved) {
+                    showToast("Unlock approved by peer.", "success");
+                    unlockMessage(data.messageId);
+                } else {
+                    showToast("Unlock rejected by peer.", "error");
+                }
+            }
+
+            // Unlock a message (same as before)
+            function unlockMessage(messageId) {
+                const messageIndex = messages.findIndex(
+                    (m) => m.id === messageId
+                );
+                if (messageIndex !== -1) {
+                    const message = messages[messageIndex];
+                    message.locked = false;
+
+                    const messageElement = document.getElementById(
+                        `message-${messageId}`
+                    );
+                    if (messageElement) {
+                        messageElement.classList.remove("locked-message");
+                        messageElement.innerHTML = `
+                <p>${message.text}</p>
+                <small>${formatTime(message.timestamp)}</small>
+            `;
+                    }
+                }
+            }
+
+            // Generate a unique ID for messages (same as before)
+            function generateId() {
+                return Math.random().toString(36).substr(2, 9);
+            }
+
+            // Handle Enter key press in message input (same as before)
+            messageInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    sendButton.click();
+                }
+            });
+
+            // Handle Enter key press in connect ID input (same as before)
+            connectToIdInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    connectButton.click();
+                }
+            });
+
+            // Copy Peer ID to clipboard (same as before)
+            peerIdDisplay.addEventListener("click", () => {
+                const peerIdText = peerIdDisplay.textContent;
+                navigator.clipboard
+                    .writeText(peerIdText)
+                    .then(() => {
+                        showToast("Peer ID copied", "success");
+                    })
+                    .catch((err) => {
+                        console.error("Could not copy text: ", err);
+                        showToast("Copy failed", "error");
+                    });
+            });
+
+            // Modal Submit Button Listener (MODIFIED LOGIC!)
+            modalSubmitButton.addEventListener("click", () => {
+                const password = modalPasswordInput.value.trim();
+                if (modalPurpose === "unlock") {
+                    requestUnlock(password); // Call requestUnlock if modal was opened for unlocking message
+                } else if (modalPurpose === "approve") {
+                    approveUnlock(password); // Call approveUnlock if modal was opened for approving request
+                }
+            });
+
+            // Modal Cancel Button Listener (same as before)
+            modalCancelButton.addEventListener("click", hidePasswordModal);
+
+            // Function to hide the password modal (same as before)
+            function hidePasswordModal() {
+                passwordModalOverlay.classList.remove("visible");
+                modalPasswordInput.value = ""; // Clear input when closing
+                currentUnlockMessageId = null; // Clear current message ID
+                modalPurpose = null; // Clear modal purpose - important!
+            }
+
+            // Optional: Close modal on Escape key (same as before)
+            window.addEventListener("keydown", (event) => {
+                if (
+                    event.key === "Escape" &&
+                    passwordModalOverlay.classList.contains("visible")
+                ) {
+                    hidePasswordModal();
+                }
+            });
+
+            // Make functions globally available (same as before)
+            window.requestUnlock = requestUnlock; // Not directly used anymore, triggered by modal
+            window.approveUnlock = approveUnlock; // Not directly used anymore, triggered by modal
+            window.rejectUnlock = rejectUnlock;
+            window.showPasswordModalForUnlock = showPasswordModalForUnlock;
+            window.showPasswordModalForApprove = showPasswordModalForApprove;
+        </script>
+    </body>
+</html>
